@@ -1,0 +1,2 @@
+RTM, other data for LMP? What's applicable for BESS?
+Demand balance model vs arbitrage.
