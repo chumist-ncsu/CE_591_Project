@@ -1,2 +1,4 @@
 RTM, other data for LMP? What's applicable for BESS?
 Demand balance model vs arbitrage.
+
+Add cost to charge/discharge to replace binary variable
