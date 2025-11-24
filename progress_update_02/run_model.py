@@ -22,7 +22,8 @@ def get_results(model, parameters):
             'price': {t+1: rtm_2_day["Settlement Point Price"].values[t] for t in range(len(rtm_2_day))},
             'C' : {None: 1 / parameters["duration"]},
             'capacity' : {None: parameters["capacity"]},
-            'Q_0': {None: (1 - parameters["dod_min"]) * parameters["capacity"]},
+            'Q_rem': {None: parameters["soh"]},
+            'Q_B': {None: parameters["capacity"]},
             'soc_0': {None: parameters["soc_0"]},
             'dod_min': {None: parameters["dod_min"]},
             'dod_max': {None: parameters["dod_max"]},
@@ -31,6 +32,7 @@ def get_results(model, parameters):
             'delta_t': {None: 0.25},
             'replace_cost': {None: replace_cost},
             'eol': {None: parameters["eol"]},
+            'lifetime': {None: parameters["lifetime"]}
         }
         }
 
@@ -65,10 +67,19 @@ def get_results(model, parameters):
                 'Grid Transaction ($)', 
                 'BESS Degradation Cost ($)',
                 'Profit ($)',
-                'Remaining Capacity (%)'
+                'Remaining Capacity (%)',
             ]
         )
-
+    
+        if isinstance(instance.delta_Q, Var):
+            # Indexed variable
+            day_results['Capacity Degradation (MWh)'] = [instance.delta_Q[t]() for t in range(1, 97)]
+        elif isinstance(instance.delta_Q, Param):
+            # Scalar parameter
+            day_results['Capacity Degradation (MWh)'] = [instance.delta_Q.value for _ in range(1, 97)]
+        else:
+            day_results['Capacity Degradation (MWh)'] = [0.0 for _ in range(1, 97)]
+        
         # Append day's results to overall results
         # check if empty DataFrame
         if bess_results.empty:
@@ -78,7 +89,7 @@ def get_results(model, parameters):
 
         # Update initial SOC and capacity for next day
         parameters["soc_0"] = instance.soc[96]()
-        parameters["capacity"] = parameters["capacity"] * instance.Q[96]()
+        parameters["soh"] = instance.Q[96]()
 
     # Set datetime index
     bess_results.index = rtm["Time"][0:len(bess_results)]

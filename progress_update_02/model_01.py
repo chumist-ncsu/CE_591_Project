@@ -1,5 +1,5 @@
 from pyomo.environ import *
-def model00():
+def model01():
     # Initialize model
     m = AbstractModel()
 
@@ -21,14 +21,15 @@ def model00():
     m.replace_cost = Param()
     m.eol = Param()
     m.lifetime = Param()
-    m.delta_Q = Param(initialize = lambda m: (1 - m.eol) / m.lifetime / 365 / 24 * m.delta_t)
     m.big_M = Param(initialize= 1e6)
+
 
     # Variables
     m.charge = Var(m.T, within=NonNegativeReals)
     m.discharge = Var(m.T, within=NonNegativeReals)
     m.soc = Var(m.T, within=NonNegativeReals)
     m.Q = Var(m.T, within=NonNegativeReals)
+    m.delta_Q = Var(m.T, within=NonNegativeReals)
     m.is_charging = Var(m.T, within=Binary)
     m.degradation_cost = Var(m.T, within=NonNegativeReals)
     m.grid_transaction = Var(m.T, within=Reals)
@@ -49,15 +50,15 @@ def model00():
     
     def charge_limit_rule_2(m, t):
         return m.charge[t] <= m.is_charging[t] * m.big_M
-    m.charge_limit_rule_2 = Constraint(m.T, rule = charge_limit_rule_2)
+    m.charge_limit_2 = Constraint(m.T, rule = charge_limit_rule_2)
 
     def discharge_limit_rule_1(m, t):
         return m.discharge[t] <= m.Q[t] * m.C
     m.discharge_limit_1 = Constraint(m.T, rule=discharge_limit_rule_1)
 
     def discharge_limit_rule_2(m, t):
-        return m.charge[t] <= (1 - m.is_charging[t]) * m.big_M
-    m.discharge_limit_rule_2 = Constraint(m.T, rule = discharge_limit_rule_2)
+        return m.discharge[t] <= (1 - m.is_charging[t]) * m.big_M
+    m.discharge_limit_2 = Constraint(m.T, rule = discharge_limit_rule_2)
 
     def soc_max_rule_1(m, t):
         return m.soc[t] <= m.Q[t] * m.Q_B
@@ -71,15 +72,19 @@ def model00():
         return m.soc[t] >= (1 - m.dod_max) * m.Q_B
     m.soc_min_constraint = Constraint(m.T, rule=soc_min_rule)
 
+    def delta_Q_rule(m, t):
+        return m.delta_Q[t] == m.fade_factor * (m.charge[t] + m.discharge[t]) / m.Q_B / 2 * m.delta_t
+    m.delta_Q_constraint = Constraint(m.T, rule=delta_Q_rule)
+
     def capacity_remaining_rule(m, t):
         if t == m.T.first():
             return m.Q[t] == m.Q_rem
         else:
-            return m.Q[t] == m.Q[m.T.prev(t)] - m.delta_Q
+            return m.Q[t] == m.Q[m.T.prev(t)] - m.delta_Q[t]
     m.capacity_remaining_constraint = Constraint(m.T, rule=capacity_remaining_rule)
 
     def degradation_cost_rule(m, t):
-        return m.degradation_cost[t] == m.delta_Q * m.replace_cost / (1.0 - m.eol)
+        return m.degradation_cost[t] == m.delta_Q[t] * m.replace_cost / (1.0 - m.eol)
     m.degradation_cost_constraint = Constraint(m.T, rule=degradation_cost_rule)
 
     def grid_transaction_rule(m, t):
