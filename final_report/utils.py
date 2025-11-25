@@ -32,7 +32,7 @@ def model():
     # SOC Balance
     def soc_balance_rule(m, t):
         if t == m.T.first():
-            return m.soc[t] == (1 - m.dod_max) * m.Q_rem + (m.charge[t] * m.efficiency - m.discharge[t] / m.efficiency) * m.delta_t
+            return m.soc[t] == m.soc_0 + (m.charge[t] * m.efficiency - m.discharge[t] / m.efficiency) * m.delta_t
         else:
             return m.soc[t] == m.soc[m.T.prev(t)] + (m.charge[t] * m.efficiency - m.discharge[t] / m.efficiency) * m.delta_t
     m.soc_balance = Constraint(m.T, rule=soc_balance_rule)
@@ -80,6 +80,9 @@ def run_model(parameters, degradation):
     # Data Frame to store results
     results = pd.DataFrame()
 
+    # Initialize soc as minimum permissible value
+    parameters['soc_0'] = Q_B * (1-parameters['dod_max'])  
+
     # Loop over 48-hr windows starting every 24 hrs
     for day in range(365):
         rtm_window = rtm[day * 96 : (day + 2) * 96]
@@ -92,9 +95,10 @@ def run_model(parameters, degradation):
             'price': {t+1: window_price[t] for t in range(len(window_price))},
             'C' : {None: 1 / parameters['duration']},
             'Q_rem': {None: parameters['capacity']},
+            'soc_0': {None: parameters['soc_0']},
             'dod_min': {None: parameters['dod_min']},
             'dod_max': {None: parameters['dod_max']},
-            'efficiency': {None: parameters['efficiency']},
+            'efficiency': {None: parameters['efficiency'] ** 0.5}, # convert round trip -> one-way
             'delta_t': {None: parameters['delta_t']},
         }}
 
